@@ -146,18 +146,34 @@
   <script>
     const socket = io();
 
-    // Listen for incoming messages
     socket.on('receive_message', (data) => {
       const li = document.createElement('li');
       li.textContent = `${data.username}: ${data.message}`;
+      li.id = `message-${data.id}`;
       document.getElementById('messages').appendChild(li);
     });
 
-    // Handle message sending
+    socket.on('messages_deleted', (data) => {
+      data.deleted_ids.forEach(id => {
+        const element = document.getElementById(`message-${id}`);
+        if (element) {
+          element.remove();
+        }
+      });
+    });
+
     document.getElementById('chat-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const message = document.getElementById('message').value;
-      socket.emit('send_message', { message });
+
+      if (message.startsWith('/deletemessage ')) {
+        const amount = parseInt(message.split(' ')[1], 10);
+        if (!isNaN(amount)) {
+          socket.emit('delete_messages', { amount });
+        }
+      } else {
+        socket.emit('send_message', { message });
+      }
       document.getElementById('message').value = '';
     });
   </script>
