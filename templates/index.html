@@ -1,4 +1,4 @@
-""<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <title>Public Chat Room</title>
@@ -43,6 +43,17 @@
       gap: 8px;
       align-items: center;
     }
+    #username {
+      width: 120px;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      outline: none;
+    }
+    #username:focus {
+      border-color: #007bff;
+    }
     #message {
       flex-grow: 1;
       padding: 10px;
@@ -69,7 +80,7 @@
       background-color: #0056b3;
     }
 
-    /* Dropdown Menu */
+    /* Dropdown menu styles */
     .dropdown {
       position: absolute;
       top: 20px;
@@ -129,65 +140,89 @@
 
     <!-- Dropdown menu -->
     <div class="dropdown" id="dropdown">
-      <button onclick="document.getElementById('dropdown').classList.toggle('show')">Menu ▼</button>
+      <button id="dropdown-btn">Menu ▼</button>
       <div class="dropdown-content">
         <h4>Security</h4>
         <p><code>/deletemessage &lt;number&gt;</code> - Delete last &lt;number&gt; messages</p>
       </div>
     </div>
 
-    <ul id="messages"></ul>
+    <ul id="messages">
+      {% for id, username, message in messages %}
+        <li data-id="{{ id }}"><strong>{{ username }}:</strong> {{ message }}</li>
+      {% endfor %}
+    </ul>
+
     <form id="chat-form">
-      <input id="message" placeholder="Type your message..." autocomplete="off">
+      <input type="text" id="username" placeholder="Your name (optional)">
+      <input type="text" id="message" placeholder="Type your message" autocomplete="off" required>
       <button type="submit">Send</button>
     </form>
   </div>
 
-  <script>
-    const socket = io();
+<script>
+  const socket = io();
 
-    // Fetch existing messages on page load
-    window.onload = async () => {
-      const response = await fetch('/');
-      const html = await response.text();
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const messages = doc.querySelectorAll('#messages li');
-      messages.forEach(message => {
-        document.getElementById('messages').appendChild(message);
-      });
-    };
+  // Handle receiving messages
+  socket.on('receive_message', data => {
+    const messages = document.getElementById('messages');
+    const li = document.createElement('li');
+    li.setAttribute('data-id', data.id);
+    li.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
+    messages.appendChild(li);
+    messages.scrollTop = messages.scrollHeight;
+  });
 
-    socket.on('receive_message', (data) => {
-      const li = document.createElement('li');
-      li.textContent = `${data.username}: ${data.message}`;
-      li.id = `message-${data.id}`;
-      document.getElementById('messages').appendChild(li);
-    });
-
-    socket.on('messages_deleted', (data) => {
-      data.deleted_ids.forEach(id => {
-        const element = document.getElementById(`message-${id}`);
-        if (element) {
-          element.remove();
-        }
-      });
-    });
-
-    document.getElementById('chat-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const message = document.getElementById('message').value;
-
-      if (message.startsWith('/deletemessage ')) {
-        const amount = parseInt(message.split(' ')[1], 10);
-        if (!isNaN(amount)) {
-          socket.emit('delete_messages', { amount });
-        }
-      } else {
-        socket.emit('send_message', { message });
+  // Handle message deletions
+  socket.on('messages_deleted', data => {
+    const deletedIds = data.deleted_ids;
+    deletedIds.forEach(id => {
+      const msgElem = document.querySelector(`#messages li[data-id='${id}']`);
+      if (msgElem) {
+        msgElem.remove();
       }
-      document.getElementById('message').value = '';
     });
-  </script>
+  });
+
+  // Submit new message
+  document.getElementById('chat-form').addEventListener('submit', e => {
+    e.preventDefault();
+
+    const messageInput = document.getElementById('message');
+    const usernameInput = document.getElementById('username');
+
+    const message = messageInput.value.trim();
+    if (!message) return;
+
+    const username = usernameInput.value.trim() || "anom";
+
+    // Check if message is a command
+    if (message.startsWith('/deletemessage ')) {
+      const parts = message.split(' ');
+      const amount = parseInt(parts[1]);
+      if (!isNaN(amount) && amount > 0) {
+        socket.emit('delete_messages', { amount: amount });
+      }
+    } else {
+      socket.emit('send_message', { username: username, message: message });
+    }
+
+    messageInput.value = '';
+  });
+
+  // Dropdown menu toggle
+  const dropdownBtn = document.getElementById('dropdown-btn');
+  const dropdown = document.getElementById('dropdown');
+  dropdownBtn.addEventListener('click', () => {
+    dropdown.classList.toggle('show');
+  });
+
+  // Close dropdown if clicked outside
+  window.addEventListener('click', e => {
+    if (!dropdown.contains(e.target)) {
+      dropdown.classList.remove('show');
+    }
+  });
+</script>
 </body>
-</html>""
+</html>
