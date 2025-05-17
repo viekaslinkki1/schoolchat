@@ -146,6 +146,18 @@
   <script>
     const socket = io();
 
+    // Fetch existing messages on page load
+    window.onload = async () => {
+      const response = await fetch('/');
+      const html = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const messages = doc.querySelectorAll('#messages li');
+      messages.forEach(message => {
+        document.getElementById('messages').appendChild(message);
+      });
+    };
+
     socket.on('receive_message', (data) => {
       const li = document.createElement('li');
       li.textContent = `${data.username}: ${data.message}`;
