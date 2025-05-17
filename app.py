@@ -23,17 +23,26 @@ def init_db():
 
 @app.route('/')
 def index():
+    # Messages are loaded via socket event, so here just render template
+    return render_template('index.html')
+
+@socketio.on('connect')
+def on_connect():
     with sqlite3.connect(DB_FILE) as conn:
         c = conn.cursor()
-        # Select id too to track messages for deletion
         c.execute("SELECT id, username, message FROM messages ORDER BY id DESC LIMIT 50")
-        messages = c.fetchall()[::-1]  # Reverse to show oldest first
-    return render_template('index.html', messages=messages)
+        messages = c.fetchall()[::-1]  # oldest first
+    # Send all stored messages to the newly connected client
+    for msg in messages:
+        emit('receive_message', {'id': msg[0], 'username': msg[1], 'message': msg[2]})
 
 @socketio.on('send_message')
 def handle_send(data):
     username = "anom"
     message = data.get('message')
+
+    if not message or message.strip() == "":
+        return  # ignore empty messages
 
     with sqlite3.connect(DB_FILE) as conn:
         c = conn.cursor()
@@ -41,7 +50,7 @@ def handle_send(data):
         message_id = c.lastrowid
         conn.commit()
 
-    # Send back the inserted message with its DB id
+    # Broadcast new message to all clients
     emit('receive_message', {'id': message_id, 'username': username, 'message': message}, broadcast=True)
 
 @socketio.on('delete_messages')
