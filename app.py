@@ -23,26 +23,19 @@ def init_db():
 
 @app.route('/')
 def index():
-    # Messages are loaded via socket event, so here just render template
-    return render_template('index.html')
-
-@socketio.on('connect')
-def on_connect():
     with sqlite3.connect(DB_FILE) as conn:
         c = conn.cursor()
         c.execute("SELECT id, username, message FROM messages ORDER BY id DESC LIMIT 50")
-        messages = c.fetchall()[::-1]  # oldest first
-    # Send all stored messages to the newly connected client
-    for msg in messages:
-        emit('receive_message', {'id': msg[0], 'username': msg[1], 'message': msg[2]})
+        messages = c.fetchall()[::-1]  # Show oldest first
+    return render_template('index.html', messages=messages)
 
 @socketio.on('send_message')
 def handle_send(data):
-    username = "anom"
+    username = data.get('username', '').strip() or "anom"  # Use input username or default "anom"
     message = data.get('message')
 
     if not message or message.strip() == "":
-        return  # ignore empty messages
+        return  # Ignore empty messages
 
     with sqlite3.connect(DB_FILE) as conn:
         c = conn.cursor()
@@ -50,7 +43,6 @@ def handle_send(data):
         message_id = c.lastrowid
         conn.commit()
 
-    # Broadcast new message to all clients
     emit('receive_message', {'id': message_id, 'username': username, 'message': message}, broadcast=True)
 
 @socketio.on('delete_messages')
@@ -69,7 +61,6 @@ def handle_delete_messages(data):
             c.execute(f"DELETE FROM messages WHERE id IN ({','.join(['?']*len(ids_to_delete))})", ids_to_delete)
             conn.commit()
 
-    # Notify all clients to remove these messages
     emit('messages_deleted', {'deleted_ids': ids_to_delete}, broadcast=True)
 
 if __name__ == '__main__':
